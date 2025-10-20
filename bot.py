@@ -16,10 +16,10 @@ from config import TELEGRAM_BOT_TOKEN, PRODUCTS, DEFAULT_PRODUCT_ID, DEFAULT_QUA
 from database import Database
 from samal_api import SamalAPI
 
-# Настройка логирования
+# Настройка логирования (только ошибки для production)
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.ERROR  # Только ошибки
 )
 logger = logging.getLogger(__name__)
 

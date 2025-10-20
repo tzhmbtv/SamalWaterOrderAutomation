@@ -9,3 +9,7 @@ DEFAULT_PRODUCT_ID=224
 # Количество бутылей по умолчанию
 DEFAULT_QUANTITY=2
 
+# Уровень логирования (ERROR - только ошибки, INFO - детально, DEBUG - максимально)
+# Для production рекомендуется ERROR для экономии места на диске
+LOG_LEVEL=ERROR
+

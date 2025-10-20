@@ -2,10 +2,18 @@
 Конфигурация для Telegram бота заказа воды Samal
 """
 import os
+import logging
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
+
+# Настройка уровня логирования
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'ERROR')  # По умолчанию только ошибки
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Telegram Bot Token
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
@@ -31,4 +39,3 @@ PRODUCTS = {
 
 # База данных
 DATABASE_PATH = 'samal_bot.db'
-
