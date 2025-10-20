@@ -1,0 +1,11 @@
+# Скопируйте этот файл как .env и заполните значения
+
+# Telegram Bot Token (получите у @BotFather)
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+
+# ID товара по умолчанию (224 = Вода Samal 18,9 л)
+DEFAULT_PRODUCT_ID=224
+
+# Количество бутылей по умолчанию
+DEFAULT_QUANTITY=2
+
