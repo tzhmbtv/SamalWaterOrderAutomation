@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Состояния разговора
 (CHOOSING_ACTION, CHOOSING_PRODUCT, CHOOSING_QUANTITY, ENTERING_NAME, ENTERING_PHONE, 
- ENTERING_ADDRESS, ENTERING_COMMENT, CONFIRMING_ORDER) = range(8)
+ ENTERING_ADDRESS, ENTERING_COMMENT, CONFIRMING_ORDER, EDIT_MENU, EDIT_NAME, 
+ EDIT_PHONE, EDIT_ADDRESS, EDIT_COMMENT, CONFIRM_DELETE) = range(14)
 
 # Инициализация базы данных
 db = Database()
@@ -436,21 +437,20 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return CONFIRMING_ORDER
 
 
-async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Показывает профиль пользователя"""
     chat_id = update.effective_chat.id
     user_data = db.get_user(chat_id)
     has_data = user_data and user_data.get('phone')
     
-    keyboard = get_main_menu_keyboard(has_data)
-    
     if not has_data:
+        keyboard = get_main_menu_keyboard(has_data)
         await update.message.reply_text(
             "📝 У вас еще нет сохраненных данных.\n"
             "Нажмите '📦 Новый заказ' для оформления заказа и сохранения информации.",
             reply_markup=keyboard
         )
-        return
+        return ConversationHandler.END
     
     profile_text = "👤 Ваш профиль:\n\n"
     profile_text += f"Имя: {user_data.get('first_name', 'Не указано')}\n"
@@ -459,7 +459,207 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user_data.get('comment'):
         profile_text += f"💬 Комментарий: {user_data.get('comment', '')}\n"
     
-    await update.message.reply_text(profile_text, reply_markup=keyboard)
+    # Кнопки для редактирования и удаления
+    keyboard = [
+        [KeyboardButton("✏️ Редактировать профиль")],
+        [KeyboardButton("🗑 Очистить все данные")],
+        [KeyboardButton("⬅️ Назад в меню")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(profile_text, reply_markup=reply_markup)
+    return ConversationHandler.END
+
+
+async def profile_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Обработка действий в профиле"""
+    text = update.message.text
+    chat_id = update.effective_chat.id
+    user_data = db.get_user(chat_id)
+    has_data = user_data and user_data.get('phone')
+    
+    if text == "⬅️ Назад в меню":
+        keyboard = get_main_menu_keyboard(has_data)
+        await update.message.reply_text("Главное меню:", reply_markup=keyboard)
+        return ConversationHandler.END
+    
+    elif text == "✏️ Редактировать профиль":
+        keyboard = [
+            [KeyboardButton("✏️ Изменить имя")],
+            [KeyboardButton("✏️ Изменить телефон")],
+            [KeyboardButton("✏️ Изменить адрес")],
+            [KeyboardButton("✏️ Изменить комментарий")],
+            [KeyboardButton("❌ Отменить")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text(
+            "✏️ Что вы хотите изменить?",
+            reply_markup=reply_markup
+        )
+        return EDIT_MENU
+    
+    elif text == "🗑 Очистить все данные":
+        keyboard = [
+            [KeyboardButton("✅ Да, удалить все данные")],
+            [KeyboardButton("❌ Отменить")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text(
+            "⚠️ Вы уверены, что хотите удалить все свои данные?\n\n"
+            "После удаления при следующем заказе нужно будет заново вводить:\n"
+            "- Имя\n"
+            "- Телефон\n"
+            "- Адрес\n"
+            "- Комментарий",
+            reply_markup=reply_markup
+        )
+        return CONFIRM_DELETE
+
+
+async def edit_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Обработка выбора поля для редактирования"""
+    text = update.message.text
+    
+    if text == "❌ Отменить":
+        return await cancel(update, context)
+    
+    elif text == "✏️ Изменить имя":
+        await update.message.reply_text(
+            "👤 Введите новое имя:",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return EDIT_NAME
+    
+    elif text == "✏️ Изменить телефон":
+        await update.message.reply_text(
+            "📱 Введите новый телефон (например: +77011234567):",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return EDIT_PHONE
+    
+    elif text == "✏️ Изменить адрес":
+        await update.message.reply_text(
+            "🏠 Введите новый адрес доставки:\n"
+            "(например: Маркова 61/1, 1 подъезд, 13 этаж, 28 квартира, ЖК Алатау)",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return EDIT_ADDRESS
+    
+    elif text == "✏️ Изменить комментарий":
+        keyboard = [
+            [KeyboardButton("🗑 Удалить комментарий")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text(
+            "💬 Введите новый комментарий к заказу\n"
+            "или нажмите '🗑 Удалить комментарий' чтобы убрать его:",
+            reply_markup=reply_markup
+        )
+        return EDIT_COMMENT
+    
+    await update.message.reply_text("❌ Пожалуйста, выберите действие с помощью кнопок.")
+    return EDIT_MENU
+
+
+async def save_edited_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Сохранение отредактированного имени"""
+    chat_id = update.effective_chat.id
+    new_name = update.message.text
+    
+    db.save_user(chat_id, first_name=new_name)
+    
+    user_data = db.get_user(chat_id)
+    has_data = user_data and user_data.get('phone')
+    keyboard = get_main_menu_keyboard(has_data)
+    
+    await update.message.reply_text(
+        f"✅ Имя успешно изменено на: {new_name}",
+        reply_markup=keyboard
+    )
+    return ConversationHandler.END
+
+
+async def save_edited_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Сохранение отредактированного телефона"""
+    chat_id = update.effective_chat.id
+    new_phone = update.message.text
+    
+    db.save_user(chat_id, phone=new_phone)
+    
+    user_data = db.get_user(chat_id)
+    has_data = user_data and user_data.get('phone')
+    keyboard = get_main_menu_keyboard(has_data)
+    
+    await update.message.reply_text(
+        f"✅ Телефон успешно изменен на: {new_phone}",
+        reply_markup=keyboard
+    )
+    return ConversationHandler.END
+
+
+async def save_edited_address(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Сохранение отредактированного адреса"""
+    chat_id = update.effective_chat.id
+    new_address = update.message.text
+    
+    db.save_user(chat_id, address=new_address)
+    
+    user_data = db.get_user(chat_id)
+    has_data = user_data and user_data.get('phone')
+    keyboard = get_main_menu_keyboard(has_data)
+    
+    await update.message.reply_text(
+        f"✅ Адрес успешно изменен на: {new_address}",
+        reply_markup=keyboard
+    )
+    return ConversationHandler.END
+
+
+async def save_edited_comment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Сохранение отредактированного комментария"""
+    chat_id = update.effective_chat.id
+    text = update.message.text
+    
+    if text == "🗑 Удалить комментарий":
+        new_comment = ""
+        message = "✅ Комментарий успешно удален"
+    else:
+        new_comment = text
+        message = f"✅ Комментарий успешно изменен на: {new_comment}"
+    
+    db.save_user(chat_id, comment=new_comment)
+    
+    user_data = db.get_user(chat_id)
+    has_data = user_data and user_data.get('phone')
+    keyboard = get_main_menu_keyboard(has_data)
+    
+    await update.message.reply_text(message, reply_markup=keyboard)
+    return ConversationHandler.END
+
+
+async def confirm_delete_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Подтверждение удаления пользователя"""
+    text = update.message.text
+    chat_id = update.effective_chat.id
+    
+    if text == "❌ Отменить":
+        return await cancel(update, context)
+    
+    elif text == "✅ Да, удалить все данные":
+        # Удаляем пользователя из базы данных
+        db.delete_user(chat_id)
+        
+        keyboard = get_main_menu_keyboard(False)  # has_data = False
+        
+        await update.message.reply_text(
+            "✅ Все ваши данные успешно удалены.\n\n"
+            "При следующем заказе нужно будет ввести данные заново.",
+            reply_markup=keyboard
+        )
+        return ConversationHandler.END
+    
+    await update.message.reply_text("❌ Пожалуйста, выберите действие с помощью кнопок.")
+    return CONFIRM_DELETE
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -535,9 +735,26 @@ def main():
         fallbacks=[CommandHandler('cancel', cancel)],
     )
     
+    # Обработчик редактирования профиля
+    profile_conv_handler = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex('^(✏️ Редактировать профиль|🗑 Очистить все данные|⬅️ Назад в меню)$'), profile_action)
+        ],
+        states={
+            EDIT_MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_menu_handler)],
+            EDIT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_name)],
+            EDIT_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_phone)],
+            EDIT_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_address)],
+            EDIT_COMMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, save_edited_comment)],
+            CONFIRM_DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_delete_user)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    
     # Добавляем обработчики
     application.add_handler(CommandHandler('start', start))
     application.add_handler(order_conv_handler)
+    application.add_handler(profile_conv_handler)
     application.add_handler(CommandHandler('profile', profile))
     application.add_handler(CommandHandler('history', history))
     application.add_handler(CommandHandler('cancel', cancel))

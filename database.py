@@ -181,4 +181,18 @@ class Database:
             'status': row[4],
             'created_at': row[5]
         } for row in orders]
+    
+    def delete_user(self, chat_id: int):
+        """Удаляет пользователя и все его заказы из базы данных"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Удаляем заказы пользователя
+        cursor.execute('DELETE FROM orders WHERE chat_id = ?', (chat_id,))
+        
+        # Удаляем пользователя
+        cursor.execute('DELETE FROM users WHERE chat_id = ?', (chat_id,))
+        
+        conn.commit()
+        conn.close()
 
