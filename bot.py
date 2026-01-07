@@ -415,6 +415,12 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         
         if result['success']:
             success_text = "✅ Заказ успешно оформлен!\n\n"
+            
+            # Добавляем номер заказа, если он получен от API
+            order_id = result.get('order_id')
+            if order_id:
+                success_text += f"📋 Номер заказа: {order_id}\n\n"
+            
             success_text += f"🚰 {product['name']}\n"
             success_text += f"📦 Количество: {quantity}\n"
             success_text += f"💰 Сумма: {total_price}₸\n\n"
